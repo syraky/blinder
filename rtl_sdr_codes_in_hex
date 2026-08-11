@@ -1,0 +1,86 @@
+******************
+** CONTROLLER 1 **
+******************
+ch1_id: 85280
+ch2_id: 89376
+ch3_id: 93472
+ch4_id: 97578
+ch5_id: 101664
+
+up: 0x4 (Mute)
+stop: 0x8 (Alarm)
+down: 0x2 (Unlock)
+
+{"time" : "2026-01-03 17:27:04", "model" : "Akhan-100F14", "id" : 85280, "data" : "0x4 (Mute)"}
+{"time" : "2026-01-03 17:27:04", "model" : "Akhan-100F14", "id" : 85280, "data" : "0x4 (Mute)"}
+{"time" : "2026-01-03 17:27:17", "model" : "Akhan-100F14", "id" : 85280, "data" : "0x8 (Alarm)"}
+{"time" : "2026-01-03 17:27:19", "model" : "Akhan-100F14", "id" : 85280, "data" : "0x2 (Unlock)"}
+{"time" : "2026-01-03 17:27:19", "model" : "Akhan-100F14", "id" : 85280, "data" : "0x2 (Unlock)"}
+{"time" : "2026-01-03 17:27:19", "model" : "Akhan-100F14", "id" : 85280, "data" : "0x2 (Unlock)"}
+{"time" : "2026-01-03 17:27:24", "model" : "Akhan-100F14", "id" : 89376, "data" : "0x4 (Mute)"}
+{"time" : "2026-01-03 17:27:24", "model" : "Akhan-100F14", "id" : 89376, "data" : "0x4 (Mute)"}
+{"time" : "2026-01-03 17:27:34", "model" : "Akhan-100F14", "id" : 89376, "data" : "0x8 (Alarm)"}
+{"time" : "2026-01-03 17:27:34", "model" : "Akhan-100F14", "id" : 89376, "data" : "0x8 (Alarm)"}
+{"time" : "2026-01-03 17:27:35", "model" : "Akhan-100F14", "id" : 89376, "data" : "0x2 (Unlock)"}
+{"time" : "2026-01-03 17:27:35", "model" : "Akhan-100F14", "id" : 89376, "data" : "0x2 (Unlock)"}
+{"time" : "2026-01-03 17:27:35", "model" : "Akhan-100F14", "id" : 89376, "data" : "0x2 (Unlock)"}
+{"time" : "2026-01-03 17:27:44", "model" : "Akhan-100F14", "id" : 93472, "data" : "0x4 (Mute)"}
+{"time" : "2026-01-03 17:27:45", "model" : "Akhan-100F14", "id" : 93472, "data" : "0x8 (Alarm)"}
+{"time" : "2026-01-03 17:27:45", "model" : "Akhan-100F14", "id" : 93472, "data" : "0x8 (Alarm)"}
+{"time" : "2026-01-03 17:27:45", "model" : "Akhan-100F14", "id" : 93472, "data" : "0x8 (Alarm)"}
+{"time" : "2026-01-03 17:27:46", "model" : "Akhan-100F14", "id" : 93472, "data" : "0x2 (Unlock)"}
+{"time" : "2026-01-03 17:27:46", "model" : "Akhan-100F14", "id" : 93472, "data" : "0x2 (Unlock)"}
+{"time" : "2026-01-03 17:27:56", "model" : "Akhan-100F14", "id" : 97568, "data" : "0x4 (Mute)"}
+{"time" : "2026-01-03 17:27:56", "model" : "Akhan-100F14", "id" : 97568, "data" : "0x4 (Mute)"}
+{"time" : "2026-01-03 17:27:59", "model" : "Akhan-100F14", "id" : 101664, "data" : "0x4 (Mute)"}
+{"time" : "2026-01-03 17:27:59", "model" : "Akhan-100F14", "id" : 101664, "data" : "0x4 (Mute)"}
+{"time" : "2026-01-03 17:28:00", "model" : "Akhan-100F14", "id" : 101664, "data" : "0x8 (Alarm)"}
+{"time" : "2026-01-03 17:28:00", "model" : "Akhan-100F14", "id" : 101664, "data" : "0x8 (Alarm)"}
+{"time" : "2026-01-03 17:28:00", "model" : "Akhan-100F14", "id" : 101664, "data" : "0x2 (Unlock)"}
+{"time" : "2026-01-03 17:28:00", "model" : "Akhan-100F14", "id" : 101664, "data" : "0x2 (Unlock)"}
+
+
+******************
+** CONTROLLER 2 **
+******************
+
+ch1_id: 89360
+ch2_id: 93456
+ch3_id: 97552
+ch4_id: 101648
+ch5_id: 105744
+
+up: 0x4 (Mute)
+stop: 0x8 (Alarm)
+down: 0x2 (Unlock)
+
+{"time" : "2026-01-03 17:06:29", "model" : "Akhan-100F14", "id" : 89360, "data" : "0x4 (Mute)"}
+{"time" : "2026-01-03 17:06:29", "model" : "Akhan-100F14", "id" : 89360, "data" : "0x4 (Mute)"}
+{"time" : "2026-01-03 17:06:32", "model" : "Akhan-100F14", "id" : 89360, "data" : "0x8 (Alarm)"}
+{"time" : "2026-01-03 17:06:32", "model" : "Akhan-100F14", "id" : 89360, "data" : "0x8 (Alarm)"}
+{"time" : "2026-01-03 17:06:34", "model" : "Akhan-100F14", "id" : 89360, "data" : "0x2 (Unlock)"}
+{"time" : "2026-01-03 17:06:37", "model" : "Akhan-100F14", "id" : 93456, "data" : "0x4 (Mute)"}
+{"time" : "2026-01-03 17:06:37", "model" : "Akhan-100F14", "id" : 93456, "data" : "0x4 (Mute)"}
+{"time" : "2026-01-03 17:06:37", "model" : "Akhan-100F14", "id" : 93456, "data" : "0x4 (Mute)"}
+{"time" : "2026-01-03 17:06:39", "model" : "Akhan-100F14", "id" : 93456, "data" : "0x8 (Alarm)"}
+{"time" : "2026-01-03 17:06:39", "model" : "Akhan-100F14", "id" : 93456, "data" : "0x8 (Alarm)"}
+{"time" : "2026-01-03 17:06:40", "model" : "Akhan-100F14", "id" : 93456, "data" : "0x2 (Unlock)"}
+{"time" : "2026-01-03 17:06:45", "model" : "Akhan-100F14", "id" : 97552, "data" : "0x4 (Mute)"}
+{"time" : "2026-01-03 17:06:45", "model" : "Akhan-100F14", "id" : 97552, "data" : "0x4 (Mute)"}
+{"time" : "2026-01-03 17:06:46", "model" : "Akhan-100F14", "id" : 97552, "data" : "0x8 (Alarm)"}
+{"time" : "2026-01-03 17:06:46", "model" : "Akhan-100F14", "id" : 97552, "data" : "0x8 (Alarm)"}
+{"time" : "2026-01-03 17:06:47", "model" : "Akhan-100F14", "id" : 97552, "data" : "0x2 (Unlock)"}
+{"time" : "2026-01-03 17:06:47", "model" : "Akhan-100F14", "id" : 97552, "data" : "0x2 (Unlock)"}
+{"time" : "2026-01-03 17:06:53", "model" : "Akhan-100F14", "id" : 101648, "data" : "0x4 (Mute)"}
+{"time" : "2026-01-03 17:06:53", "model" : "Akhan-100F14", "id" : 101648, "data" : "0x4 (Mute)"}
+{"time" : "2026-01-03 17:06:53", "model" : "Akhan-100F14", "id" : 101648, "data" : "0x4 (Mute)"}
+{"time" : "2026-01-03 17:06:54", "model" : "Akhan-100F14", "id" : 101648, "data" : "0x8 (Alarm)"}
+{"time" : "2026-01-03 17:06:54", "model" : "Akhan-100F14", "id" : 101648, "data" : "0x8 (Alarm)"}
+{"time" : "2026-01-03 17:06:55", "model" : "Akhan-100F14", "id" : 101648, "data" : "0x2 (Unlock)"}
+{"time" : "2026-01-03 17:06:55", "model" : "Akhan-100F14", "id" : 101648, "data" : "0x2 (Unlock)"}
+{"time" : "2026-01-03 17:06:57", "model" : "Akhan-100F14", "id" : 105744, "data" : "0x4 (Mute)"}
+{"time" : "2026-01-03 17:06:57", "model" : "Akhan-100F14", "id" : 105744, "data" : "0x4 (Mute)"}
+{"time" : "2026-01-03 17:06:58", "model" : "Akhan-100F14", "id" : 105744, "data" : "0x8 (Alarm)"}
+{"time" : "2026-01-03 17:06:58", "model" : "Akhan-100F14", "id" : 105744, "data" : "0x8 (Alarm)"}
+{"time" : "2026-01-03 17:06:59", "model" : "Akhan-100F14", "id" : 105744, "data" : "0x2 (Unlock)"}
+{"time" : "2026-01-03 17:06:59", "model" : "Akhan-100F14", "id" : 105744, "data" : "0x2 (Unlock)"}
