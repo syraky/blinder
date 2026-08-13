@@ -1,0 +1,66 @@
+<?xml version="1.0" ?>
+<UniversalRadioHackerProject description="" collapse_project_tabs="0" modulation_was_edited="0" broadcast_address_hex="ffff">
+  <modulators>
+    <modulator carrier_freq_hz="40000" carrier_amplitude="1" carrier_phase_deg="0" samples_per_symbol="100" name="Modulator" gauss_bt="0.5" gauss_filter_width="1" sample_rate="None" modulation_type="ASK" index="0" parameters="0.0,100.0" bits_per_symbol="1"/>
+  </modulators>
+  <device_conf>
+    <apply_dc_correction>True</apply_dc_correction>
+    <bandwidth>1000000.0110000005</bandwidth>
+    <bias_tee_enabled>False</bias_tee_enabled>
+    <freq_correction>1</freq_correction>
+    <frequency>433920000.0</frequency>
+    <gain>20</gain>
+    <name>RTL-SDR</name>
+    <num_sending_repeats>0</num_sending_repeats>
+    <rx_antenna_index>-1</rx_antenna_index>
+    <rx_baseband_gain>16</rx_baseband_gain>
+    <rx_gain>30</rx_gain>
+    <rx_if_gain>20</rx_if_gain>
+    <sample_rate>1000000.0110000005</sample_rate>
+  </device_conf>
+  <simulator_rx_conf/>
+  <simulator_tx_conf/>
+  <signal name="janka_ch01_stop" filename="janka_ch01_stop.complex16s" samples_per_symbol="300" center="0.3289502114057541" center_spacing="1" tolerance="0" noise_threshold="0" noise_minimum="0" noise_maximum="0" modulation_type="ASK" sample_rate="1000000.0110000005" pause_threshold="8" message_length_divisor="1" bits_per_symbol="1" costas_loop_bandwidth="0.1">
+    <messages/>
+  </signal>
+  <open_file name="janka_ch01_stop.complex16s" position="0"/>
+  <signal name="janka_ch01_down" filename="janka_ch01_down.complex16s" samples_per_symbol="300" center="0.3733138404786587" center_spacing="1" tolerance="0" noise_threshold="0" noise_minimum="0" noise_maximum="0" modulation_type="ASK" sample_rate="1000000.0110000005" pause_threshold="8" message_length_divisor="1" bits_per_symbol="1" costas_loop_bandwidth="0.1">
+    <messages/>
+  </signal>
+  <open_file name="janka_ch01_down.complex16s" position="1"/>
+  <signal name="janka_ch01_up" filename="janka_ch01_up.complex16s" samples_per_symbol="300" center="0.3389068217948079" center_spacing="1" tolerance="0" noise_threshold="0" noise_minimum="0" noise_maximum="0" modulation_type="ASK" sample_rate="1000000.0110000005" pause_threshold="8" message_length_divisor="1" bits_per_symbol="1" costas_loop_bandwidth="0.1">
+    <messages/>
+  </signal>
+  <open_file name="janka_ch01_up.complex16s" position="2"/>
+  <group name="New Group" id="0">
+    <cf_protocol filename="janka_ch01_up.complex16s"/>
+    <cf_protocol filename="janka_ch01_stop.complex16s"/>
+    <cf_protocol filename="janka_ch01_down.complex16s"/>
+  </group>
+  <protocol>
+    <decodings>
+      <decoding>'Non Return To Zero (NRZ)', </decoding>
+      <decoding>'Non Return To Zero + Invert', 'Invert', </decoding>
+      <decoding>'Manchester I', 'Edge Trigger', </decoding>
+      <decoding>'Manchester II', 'Edge Trigger', 'Invert', </decoding>
+      <decoding>'Differential Manchester', 'Edge Trigger', 'Differential Encoding', </decoding>
+    </decodings>
+    <participants>
+      <participant name="Alice" shortname="A" address_hex="" color_index="0" id="ce13e9f5-0d10-463e-b1ee-993c68f50c69" relative_rssi="0" simulate="0"/>
+      <participant name="Bob" shortname="B" address_hex="" color_index="1" id="897510ca-f489-4bbd-b2c1-beb53aeee1eb" relative_rssi="1" simulate="0"/>
+    </participants>
+    <messages>
+      <message message_type_id="56c6ecd6-9961-40fe-a872-73883f43a6cd" modulator_index="0" pause="0" timestamp="1786460200.486568" decoding_index="0"/>
+      <message message_type_id="56c6ecd6-9961-40fe-a872-73883f43a6cd" modulator_index="0" pause="2889" timestamp="1786460221.4402366" decoding_index="0"/>
+      <message message_type_id="56c6ecd6-9961-40fe-a872-73883f43a6cd" modulator_index="0" pause="0" timestamp="1786460243.8183255" decoding_index="0"/>
+    </messages>
+    <message_types>
+      <message_type name="Default" id="56c6ecd6-9961-40fe-a872-73883f43a6cd" assigned_by_ruleset="0" assigned_by_logic_analyzer="0">
+        <ruleset mode="0"/>
+      </message_type>
+    </message_types>
+  </protocol>
+  <simulator_config>
+    <items/>
+  </simulator_config>
+</UniversalRadioHackerProject>
