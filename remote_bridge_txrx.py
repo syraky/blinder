@@ -5,14 +5,14 @@ import time
 import re
 import sys
 import threading
-import RPi.GPIO as GPIO
+import pigpio
 
 # ============================
 # CONFIG
 # ============================
 
 COOLDOWN_SEC = 0.35
-DEBUG = True  # Set to True to print debug logs for RX signals and pulse counts
+DEBUG = True  # Set to True to print debug logs for RX signals
 
 # ============================
 # TX CODES (blinds)
@@ -88,7 +88,19 @@ CHANNEL_TO_TARGET = {
 }
 
 # ============================
-# STATE VARIABLES FOR RX & TX PREVENTING ECHO
+# pigpio INITIALIZATION
+# ============================
+
+pi = pigpio.pi()
+if not pi.connected:
+    print("\n[ERROR] Could not connect to pigpiod daemon.")
+    print("Please make sure pigpiod is running. You can start it with:")
+    print("  sudo systemctl enable pigpiod")
+    print("  sudo systemctl start pigpiod\n")
+    sys.exit(1)
+
+# ============================
+# STATE VARIABLES
 # ============================
 
 rx_lock = threading.Lock()
@@ -116,15 +128,15 @@ def transmit_code(code: str):
         for _ in range(NUM_ATTEMPTS):
             for sym in code:
                 if sym == '2':
-                    GPIO.output(TX_PIN, 1); time.sleep(FIRST_BLOCK_ON)
-                    GPIO.output(TX_PIN, 0); time.sleep(FIRST_BLOCK_OFF)
+                    pi.write(TX_PIN, 1); time.sleep(FIRST_BLOCK_ON)
+                    pi.write(TX_PIN, 0); time.sleep(FIRST_BLOCK_OFF)
                 elif sym == '1':
-                    GPIO.output(TX_PIN, 1); time.sleep(LONG_DELAY)
-                    GPIO.output(TX_PIN, 0); time.sleep(SHORT_DELAY)
+                    pi.write(TX_PIN, 1); time.sleep(LONG_DELAY)
+                    pi.write(TX_PIN, 0); time.sleep(SHORT_DELAY)
                 elif sym == '0':
-                    GPIO.output(TX_PIN, 1); time.sleep(SHORT_DELAY)
-                    GPIO.output(TX_PIN, 0); time.sleep(LONG_DELAY)
-            GPIO.output(TX_PIN, 0)
+                    pi.write(TX_PIN, 1); time.sleep(SHORT_DELAY)
+                    pi.write(TX_PIN, 0); time.sleep(LONG_DELAY)
+            pi.write(TX_PIN, 0)
             time.sleep(EXTENDED_DELAY)
     finally:
         is_transmitting = False
@@ -153,10 +165,8 @@ def handle(remote_name: str, channel: str, action: str):
 # RX CALLBACK & DECODING
 # ============================
 
-def rx_callback(channel):
+def rx_callback(gpio, level, tick):
     global last_tick, bit_buffer, last_edge_time, raw_transition_count, preamble_detected
-    now = time.perf_counter()
-    state = GPIO.input(channel)
     
     raw_transition_count += 1
     
@@ -173,37 +183,34 @@ def rx_callback(channel):
         last_edge_time = now_wall
         
         if last_tick is None:
-            last_tick = now
+            last_tick = tick
             return
             
-        duration = now - last_tick
-        last_tick = now
+        # pigpio tick is in microseconds
+        duration = pigpio.tickDiff(last_tick, tick)
+        last_tick = tick
         
-        # In OOK PWM, the bit value is encoded in the width of the HIGH pulse.
-        # If the state is now LOW (0), it means the state that just finished was HIGH (1).
-        if state == 0:
-            pulse_us = duration * 1_000_000
+        # level == 0 means falling edge (so the previous state was HIGH)
+        if level == 0:
+            pulse_us = duration
             
-            # 1. Preamble Detection: Look for a long HIGH pulse (nominally ~3620 us)
-            # We use a wide window [2500, 5000] us to tolerate OS timing jitter.
-            if 2500 <= pulse_us <= 5000:
+            # Preamble detection (nominally 3620 us).
+            # Using tickDiff from pigpio provides precise hardware timing.
+            if 2800 <= pulse_us <= 4500:
                 preamble_detected = True
                 bit_buffer.clear()
                 if DEBUG:
-                    log(f"[DEBUG] Preamble detected ({pulse_us:.0f} us). Listening for data bits...")
+                    log(f"[DEBUG] Preamble detected ({pulse_us} us). Listening for bits...")
                 return
                 
-            # 2. If no preamble has been detected yet, discard all pulses
             if not preamble_detected:
                 return
                 
-            # 3. Decode bits based on HIGH pulse width
             if 150 <= pulse_us <= 600:
                 bit_buffer.append('0')
             elif 700 <= pulse_us <= 1500:
                 bit_buffer.append('1')
                 
-            # Discard if buffer grows too large (noise overflow protection)
             if len(bit_buffer) > 40:
                 bit_buffer.clear()
                 preamble_detected = False
@@ -236,11 +243,10 @@ def check_timeout_loop():
                     hex_val = "invalid"
                 log(f"[DEBUG] RX Packet: received {len(bit_str)} bits ({bit_str}) -> Hex: {hex_val}")
                 
-            # Only process if we have exactly 28 bits (corresponding to 7 hex chars)
             if len(bit_str) == 28:
                 try:
                     val = int(bit_str, 2)
-                    data = f"{val:07x}" # 28 bits = 7 hex digits
+                    data = f"{val:07x}"
                     
                     if data in REMOTE_CODE_MAP:
                         remote_name, channel, action = REMOTE_CODE_MAP[data]
@@ -268,50 +274,50 @@ def heartbeat_loop():
         count = raw_transition_count
         raw_transition_count = 0
         if DEBUG:
-            log(f"[DEBUG] Heartbeat: detected {count} state changes on RX pin in the last 5 seconds.")
+            log(f"[DEBUG] Heartbeat: detected {count} filtered state changes on RX pin in the last 5 seconds.")
 
 # ============================
 # MAIN
 # ============================
 
 def main():
-    GPIO.setmode(GPIO.BCM)
-    
-    # Transmitter Setup
-    GPIO.setup(TX_PIN, GPIO.OUT)
-    GPIO.output(TX_PIN, 0)
+    # Pin modes setup
+    pi.set_mode(TX_PIN, pigpio.OUTPUT)
+    pi.write(TX_PIN, 0)
     
     # If the user wants to test TX:
-    # Usage: python3 remote_bridge_txrx.py --test-tx <blind_id> <action>
-    # Example: python3 remote_bridge_txrx.py --test-tx w7 up
     if len(sys.argv) > 1 and sys.argv[1] == "--test-tx":
         if len(sys.argv) < 4:
             print("Usage for TX test: python3 remote_bridge_txrx.py --test-tx <blind_id> <action>")
             print("Example: python3 remote_bridge_txrx.py --test-tx w7 up")
-            GPIO.cleanup()
+            pi.stop()
             sys.exit(1)
         blind_id = sys.argv[2]
         action = sys.argv[3]
         tx_code = BLIND_TX.get(blind_id, {}).get(action)
         if not tx_code:
             print(f"Error: Unknown blind={blind_id} or action={action}")
-            GPIO.cleanup()
+            pi.stop()
             sys.exit(1)
         
         log(f"TEST TX -> transmitting command for blind={blind_id} action={action}...")
         transmit_code(tx_code)
         log("Test transmission complete.")
-        GPIO.cleanup()
+        pi.stop()
         sys.exit(0)
 
-    log("Starting direct GPIO RF bridge (MX-RM-5V + Transmitter)")
+    log("Starting direct GPIO RF bridge with pigpio (MX-RM-5V + Transmitter)")
     log(f"Allowed model/protocol: OOK_PWM (s=356us, l=1028us)")
     
-    # Receiver Setup with internal pull-down to prevent floating input noise
-    GPIO.setup(RX_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+    # Receiver Setup
+    pi.set_mode(RX_PIN, pigpio.INPUT)
+    pi.set_pull_up_down(RX_PIN, pigpio.PUD_DOWN)
     
-    # Setup Edge Interrupts on RX Pin
-    GPIO.add_event_detect(RX_PIN, GPIO.BOTH, callback=rx_callback)
+    # Set a glitch filter of 150 us to filter out high-frequency noise at the C level
+    pi.set_glitch_filter(RX_PIN, 150)
+    
+    # Setup Edge Interrupt Callback on RX Pin
+    cb = pi.callback(RX_PIN, pigpio.EITHER_EDGE, rx_callback)
     
     # Start background checker thread
     t = threading.Thread(target=check_timeout_loop, daemon=True)
@@ -326,8 +332,9 @@ def main():
             time.sleep(1)
     except KeyboardInterrupt:
         log("Stopping (Ctrl+C)")
-        GPIO.output(TX_PIN, 0)
-        GPIO.cleanup()
+        pi.write(TX_PIN, 0)
+        cb.cancel()
+        pi.stop()
 
 if __name__ == "__main__":
     main()
