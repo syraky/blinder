@@ -12,6 +12,7 @@ import RPi.GPIO as GPIO
 # ============================
 
 COOLDOWN_SEC = 0.35
+DEBUG = True  # Set to True to print debug logs for RX signals and pulse counts
 
 # ============================
 # TX CODES (blinds)
@@ -98,6 +99,8 @@ last_tick = None
 is_transmitting = False
 last_tx_time = 0.0
 
+raw_transition_count = 0
+
 # ============================
 # HELPER FUNCTIONS
 # ============================
@@ -150,9 +153,11 @@ def handle(remote_name: str, channel: str, action: str):
 # ============================
 
 def rx_callback(channel):
-    global last_tick, bit_buffer, last_edge_time
+    global last_tick, bit_buffer, last_edge_time, raw_transition_count
     now = time.perf_counter()
     state = GPIO.input(channel)
+    
+    raw_transition_count += 1
     
     # Ignore signals during transmission and shortly after
     if is_transmitting or (time.time() - last_tx_time) < 0.2:
@@ -199,6 +204,14 @@ def check_timeout_loop():
                 
         if bits:
             bit_str = "".join(bits)
+            if DEBUG:
+                try:
+                    val = int(bit_str, 2)
+                    hex_val = f"{val:07x}"
+                except ValueError:
+                    hex_val = "invalid"
+                log(f"[DEBUG] RX Packet: received {len(bit_str)} bits ({bit_str}) -> Hex: {hex_val}")
+                
             # Only process if we have exactly 28 bits (corresponding to 7 hex chars)
             if len(bit_str) == 28:
                 try:
@@ -219,23 +232,56 @@ def check_timeout_loop():
                         log(f"RX -> remote={remote_name} channel={channel} action={action} data={data}")
                         handle(remote_name, channel, action)
                     else:
-                        log(f"UNKNOWN DATA (28 bits): {data}")
+                        if not DEBUG:
+                            log(f"UNKNOWN DATA (28 bits): {data}")
                 except Exception as e:
                     log(f"Error decoding bits {bit_str}: {e}")
+
+def heartbeat_loop():
+    global raw_transition_count
+    while True:
+        time.sleep(5.0)
+        count = raw_transition_count
+        raw_transition_count = 0
+        if DEBUG:
+            log(f"[DEBUG] Heartbeat: detected {count} state changes on RX pin in the last 5 seconds.")
 
 # ============================
 # MAIN
 # ============================
 
 def main():
-    log("Starting direct GPIO RF bridge (MX-RM-5V + Transmitter)")
-    log(f"Allowed model/protocol: OOK_PWM (s=356us, l=1028us)")
-
     GPIO.setmode(GPIO.BCM)
     
     # Transmitter Setup
     GPIO.setup(TX_PIN, GPIO.OUT)
     GPIO.output(TX_PIN, 0)
+    
+    # If the user wants to test TX:
+    # Usage: python3 remote_bridge_txrx.py --test-tx <blind_id> <action>
+    # Example: python3 remote_bridge_txrx.py --test-tx w7 up
+    if len(sys.argv) > 1 and sys.argv[1] == "--test-tx":
+        if len(sys.argv) < 4:
+            print("Usage for TX test: python3 remote_bridge_txrx.py --test-tx <blind_id> <action>")
+            print("Example: python3 remote_bridge_txrx.py --test-tx w7 up")
+            GPIO.cleanup()
+            sys.exit(1)
+        blind_id = sys.argv[2]
+        action = sys.argv[3]
+        tx_code = BLIND_TX.get(blind_id, {}).get(action)
+        if not tx_code:
+            print(f"Error: Unknown blind={blind_id} or action={action}")
+            GPIO.cleanup()
+            sys.exit(1)
+        
+        log(f"TEST TX -> transmitting command for blind={blind_id} action={action}...")
+        transmit_code(tx_code)
+        log("Test transmission complete.")
+        GPIO.cleanup()
+        sys.exit(0)
+
+    log("Starting direct GPIO RF bridge (MX-RM-5V + Transmitter)")
+    log(f"Allowed model/protocol: OOK_PWM (s=356us, l=1028us)")
     
     # Receiver Setup
     GPIO.setup(RX_PIN, GPIO.IN)
@@ -246,6 +292,10 @@ def main():
     # Start background checker thread
     t = threading.Thread(target=check_timeout_loop, daemon=True)
     t.start()
+    
+    # Start heartbeat thread
+    tb = threading.Thread(target=heartbeat_loop, daemon=True)
+    tb.start()
 
     try:
         while True:
