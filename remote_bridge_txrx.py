@@ -196,11 +196,9 @@ def rx_callback(gpio, level, tick):
             
             # Preamble detection (nominally 3620 us).
             # Using tickDiff from pigpio provides precise hardware timing.
-            if 2800 <= pulse_us <= 4500:
+            if 2500 <= pulse_us <= 5000:
                 preamble_detected = True
                 bit_buffer.clear()
-                if DEBUG:
-                    log(f"[DEBUG] Preamble detected ({pulse_us} us). Listening for bits...")
                 return
                 
             if not preamble_detected:
@@ -235,7 +233,7 @@ def check_timeout_loop():
         if bits:
             bit_str = "".join(bits)
             
-            if DEBUG:
+            if DEBUG and (25 <= len(bit_str) <= 35):
                 try:
                     val = int(bit_str, 2)
                     hex_val = f"{val:07x}"
