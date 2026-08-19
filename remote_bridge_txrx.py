@@ -104,15 +104,21 @@ if not pi.connected:
 # ============================
 
 rx_lock = threading.Lock()
-bit_buffer = []
+edge_buffer = []          # list of (tick, level) tuples for current capture
 last_edge_time = 0.0
-last_tick = None
 
 is_transmitting = False
 last_tx_time = 0.0
 
 raw_transition_count = 0
-preamble_detected = False
+diag_mode = False         # set via --diag flag
+
+# Pulse width histogram buckets for diagnostics
+pulse_hist = {
+    "<100": 0, "100-250": 0, "250-500": 0, "500-800": 0,
+    "800-1200": 0, "1200-2000": 0, "2000-4000": 0,
+    "4000-8000": 0, "8000+": 0
+}
 
 # ============================
 # HELPER FUNCTIONS
@@ -120,6 +126,17 @@ preamble_detected = False
 
 def log(msg: str):
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}", flush=True)
+
+def classify_pulse(us):
+    if us < 100: return "<100"
+    if us < 250: return "100-250"
+    if us < 500: return "250-500"
+    if us < 800: return "500-800"
+    if us < 1200: return "800-1200"
+    if us < 2000: return "1200-2000"
+    if us < 4000: return "2000-4000"
+    if us < 8000: return "4000-8000"
+    return "8000+"
 
 def transmit_code(code: str):
     global is_transmitting, last_tx_time
@@ -166,104 +183,135 @@ def handle(remote_name: str, channel: str, action: str):
 # ============================
 
 def rx_callback(gpio, level, tick):
-    global last_tick, bit_buffer, last_edge_time, raw_transition_count, preamble_detected
-    
+    """Gap-based framing: collect all edges; the timeout loop detects packet
+    boundaries by looking for gaps > 2 ms between consecutive edges."""
+    global last_edge_time, raw_transition_count
+
     raw_transition_count += 1
-    
+
     # Ignore signals during transmission and shortly after
     if is_transmitting or (time.time() - last_tx_time) < 0.2:
         with rx_lock:
-            bit_buffer.clear()
-            preamble_detected = False
+            edge_buffer.clear()
         return
 
     now_wall = time.time()
-    
+
     with rx_lock:
         last_edge_time = now_wall
-        
-        if last_tick is None:
-            last_tick = tick
-            return
-            
-        # pigpio tick is in microseconds
-        duration = pigpio.tickDiff(last_tick, tick)
-        last_tick = tick
-        
-        # level == 0 means falling edge (so the previous state was HIGH)
-        if level == 0:
-            pulse_us = duration
-            
-            # Preamble detection (nominally 3620 us).
-            # Using tickDiff from pigpio provides precise hardware timing.
-            if 2500 <= pulse_us <= 5000:
-                preamble_detected = True
-                bit_buffer.clear()
-                return
-                
-            if not preamble_detected:
-                return
-                
-            if 150 <= pulse_us <= 600:
-                bit_buffer.append('0')
-            elif 700 <= pulse_us <= 1500:
-                bit_buffer.append('1')
-                
-            if len(bit_buffer) > 40:
-                bit_buffer.clear()
-                preamble_detected = False
+        edge_buffer.append((tick, level))
+        # Safety cap – keep at most 500 edges in the buffer
+        if len(edge_buffer) > 500:
+            edge_buffer.pop(0)
+
+
+def decode_edges(edges):
+    """Given a list of (tick, level) edges, extract HIGH-pulse durations
+    and decode them into bits.
+    Returns (bit_string, high_pulses_us_list)."""
+    high_pulses = []
+    bits = []
+
+    for i in range(1, len(edges)):
+        duration = pigpio.tickDiff(edges[i-1][0], edges[i][0])
+        prev_level_after = edges[i][1]  # level AFTER this edge
+
+        # prev_level_after == 0 means we just had a falling edge,
+        # so the interval was a HIGH pulse.
+        if prev_level_after == 0:
+            high_pulses.append(duration)
+
+    # Now decode the HIGH pulses.
+    # Look for preamble (>2000 us HIGH) followed by short/long data bits.
+    preamble_idx = None
+    for idx, p in enumerate(high_pulses):
+        if p >= 2000:
+            preamble_idx = idx
+            # Don't break – take the LAST preamble in the burst
+            # (earlier ones might be noise)
+
+    if preamble_idx is not None:
+        data_pulses = high_pulses[preamble_idx + 1:]
+        for p in data_pulses:
+            if 150 <= p <= 600:
+                bits.append('0')
+            elif 600 < p <= 1500:
+                bits.append('1')
+            else:
+                break  # invalid pulse terminates the packet
+
+    return "".join(bits), high_pulses
+
 
 def check_timeout_loop():
-    global bit_buffer, last_edge_time, preamble_detected
+    """Periodically checks if there's a gap > 5 ms since the last edge,
+    indicating a packet boundary. Then decodes the collected edges."""
+    global edge_buffer, last_edge_time
     last_cooldown_key = None
     last_ts = 0.0
-    
+
     while True:
-        time.sleep(0.01) # Check every 10 ms
-        
+        time.sleep(0.008)  # Check every 8 ms
+
         with rx_lock:
-            # If we have bits, and no edges occurred for > 20 ms, process the packet
-            if bit_buffer and (time.time() - last_edge_time) > 0.020:
-                bits = bit_buffer
-                bit_buffer = []
-                preamble_detected = False
+            # If we have edges and no new edge for > 5 ms, process the burst
+            if edge_buffer and (time.time() - last_edge_time) > 0.005:
+                edges = list(edge_buffer)
+                edge_buffer.clear()
             else:
-                bits = None
-                
-        if bits:
-            bit_str = "".join(bits)
-            
-            if DEBUG and (25 <= len(bit_str) <= 35):
-                try:
-                    val = int(bit_str, 2)
-                    hex_val = f"{val:07x}"
-                except ValueError:
-                    hex_val = "invalid"
-                log(f"[DEBUG] RX Packet: received {len(bit_str)} bits ({bit_str}) -> Hex: {hex_val}")
-                
-            if len(bit_str) == 28:
-                try:
-                    val = int(bit_str, 2)
-                    data = f"{val:07x}"
-                    
-                    if data in REMOTE_CODE_MAP:
-                        remote_name, channel, action = REMOTE_CODE_MAP[data]
-                        
-                        cooldown_key = (remote_name, channel, action)
-                        now = time.time()
-                        if cooldown_key == last_cooldown_key and (now - last_ts) < COOLDOWN_SEC:
-                            continue
-                            
-                        last_cooldown_key = cooldown_key
-                        last_ts = now
-                        
-                        log(f"RX -> remote={remote_name} channel={channel} action={action} data={data}")
-                        handle(remote_name, channel, action)
-                    else:
-                        if not DEBUG:
-                            log(f"UNKNOWN DATA (28 bits): {data}")
-                except Exception as e:
-                    log(f"Error decoding bits {bit_str}: {e}")
+                edges = None
+
+        if not edges or len(edges) < 4:
+            continue
+
+        bit_str, high_pulses = decode_edges(edges)
+
+        # In diagnostic mode, log all bursts
+        if diag_mode:
+            # Update histogram
+            for p in high_pulses:
+                bucket = classify_pulse(p)
+                pulse_hist[bucket] += 1
+            if len(high_pulses) >= 5:
+                sample = high_pulses[:20]
+                log(f"[DIAG] Burst: {len(edges)} edges, {len(high_pulses)} HIGH pulses. "
+                    f"Sample HIGH durations (us): {sample}")
+                if bit_str:
+                    log(f"[DIAG]   Decoded {len(bit_str)} bits: {bit_str}")
+
+        if not bit_str:
+            continue
+
+        if DEBUG and len(bit_str) >= 10:
+            try:
+                val = int(bit_str, 2)
+                hex_val = f"{val:07x}"
+            except ValueError:
+                hex_val = "invalid"
+            log(f"[DEBUG] RX Packet: {len(bit_str)} bits ({bit_str}) -> Hex: {hex_val}")
+
+        if len(bit_str) == 28:
+            try:
+                val = int(bit_str, 2)
+                data = f"{val:07x}"
+
+                if data in REMOTE_CODE_MAP:
+                    remote_name, channel, action = REMOTE_CODE_MAP[data]
+
+                    cooldown_key = (remote_name, channel, action)
+                    now = time.time()
+                    if cooldown_key == last_cooldown_key and (now - last_ts) < COOLDOWN_SEC:
+                        continue
+
+                    last_cooldown_key = cooldown_key
+                    last_ts = now
+
+                    log(f"RX -> remote={remote_name} channel={channel} action={action} data={data}")
+                    handle(remote_name, channel, action)
+                else:
+                    log(f"UNKNOWN 28-bit code: {data}")
+            except Exception as e:
+                log(f"Error decoding bits {bit_str}: {e}")
 
 def heartbeat_loop():
     global raw_transition_count
@@ -272,17 +320,24 @@ def heartbeat_loop():
         count = raw_transition_count
         raw_transition_count = 0
         if DEBUG:
-            log(f"[DEBUG] Heartbeat: detected {count} filtered state changes on RX pin in the last 5 seconds.")
+            log(f"[DEBUG] Heartbeat: {count} edges in last 5s")
+        if diag_mode and any(v > 0 for v in pulse_hist.values()):
+            hist_str = ", ".join(f"{k}: {v}" for k, v in pulse_hist.items() if v > 0)
+            log(f"[DIAG] Pulse histogram: {hist_str}")
+            for k in pulse_hist:
+                pulse_hist[k] = 0
 
 # ============================
 # MAIN
 # ============================
 
 def main():
+    global diag_mode
+
     # Pin modes setup
     pi.set_mode(TX_PIN, pigpio.OUTPUT)
     pi.write(TX_PIN, 0)
-    
+
     # If the user wants to test TX:
     if len(sys.argv) > 1 and sys.argv[1] == "--test-tx":
         if len(sys.argv) < 4:
@@ -297,30 +352,36 @@ def main():
             print(f"Error: Unknown blind={blind_id} or action={action}")
             pi.stop()
             sys.exit(1)
-        
+
         log(f"TEST TX -> transmitting command for blind={blind_id} action={action}...")
         transmit_code(tx_code)
         log("Test transmission complete.")
         pi.stop()
         sys.exit(0)
 
+    if "--diag" in sys.argv:
+        diag_mode = True
+        log(">>> DIAGNOSTIC MODE ENABLED – logging all pulse widths <<<")
+
     log("Starting direct GPIO RF bridge with pigpio (MX-RM-5V + Transmitter)")
     log(f"Allowed model/protocol: OOK_PWM (s=356us, l=1028us)")
-    
+
     # Receiver Setup
     pi.set_mode(RX_PIN, pigpio.INPUT)
     pi.set_pull_up_down(RX_PIN, pigpio.PUD_DOWN)
-    
-    # Set a glitch filter of 150 us to filter out high-frequency noise at the C level
-    pi.set_glitch_filter(RX_PIN, 150)
-    
+
+    # Glitch filter: 100 us – low enough to preserve 356 us short pulses
+    # but still eliminates sub-100us ringing
+    pi.set_glitch_filter(RX_PIN, 100)
+    log(f"Glitch filter: 100 us | RX pin: GPIO{RX_PIN} | TX pin: GPIO{TX_PIN}")
+
     # Setup Edge Interrupt Callback on RX Pin
     cb = pi.callback(RX_PIN, pigpio.EITHER_EDGE, rx_callback)
-    
+
     # Start background checker thread
     t = threading.Thread(target=check_timeout_loop, daemon=True)
     t.start()
-    
+
     # Start heartbeat thread
     tb = threading.Thread(target=heartbeat_loop, daemon=True)
     tb.start()
