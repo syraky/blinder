@@ -185,6 +185,10 @@ def rx_callback(channel):
                 bit_buffer.append('0')
             elif 700 <= pulse_us <= 1500:
                 bit_buffer.append('1')
+                
+            # Prevent buffer overflow from continuous noise accumulation
+            if len(bit_buffer) > 40:
+                bit_buffer.clear()
 
 def check_timeout_loop():
     global bit_buffer, last_edge_time
@@ -204,7 +208,9 @@ def check_timeout_loop():
                 
         if bits:
             bit_str = "".join(bits)
-            if DEBUG:
+            
+            # Only print debug info if the packet has a reasonable length (filtering out minor noise)
+            if DEBUG and (25 <= len(bit_str) <= 35):
                 try:
                     val = int(bit_str, 2)
                     hex_val = f"{val:07x}"
@@ -232,7 +238,7 @@ def check_timeout_loop():
                         log(f"RX -> remote={remote_name} channel={channel} action={action} data={data}")
                         handle(remote_name, channel, action)
                     else:
-                        if not DEBUG:
+                        if not DEBUG or not (25 <= len(bit_str) <= 35): # Avoid double logging if debug already did it
                             log(f"UNKNOWN DATA (28 bits): {data}")
                 except Exception as e:
                     log(f"Error decoding bits {bit_str}: {e}")
@@ -283,8 +289,8 @@ def main():
     log("Starting direct GPIO RF bridge (MX-RM-5V + Transmitter)")
     log(f"Allowed model/protocol: OOK_PWM (s=356us, l=1028us)")
     
-    # Receiver Setup
-    GPIO.setup(RX_PIN, GPIO.IN)
+    # Receiver Setup with internal pull-down to prevent floating input noise
+    GPIO.setup(RX_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
     
     # Setup Edge Interrupts on RX Pin
     GPIO.add_event_detect(RX_PIN, GPIO.BOTH, callback=rx_callback)
