@@ -100,6 +100,7 @@ is_transmitting = False
 last_tx_time = 0.0
 
 raw_transition_count = 0
+preamble_detected = False
 
 # ============================
 # HELPER FUNCTIONS
@@ -153,7 +154,7 @@ def handle(remote_name: str, channel: str, action: str):
 # ============================
 
 def rx_callback(channel):
-    global last_tick, bit_buffer, last_edge_time, raw_transition_count
+    global last_tick, bit_buffer, last_edge_time, raw_transition_count, preamble_detected
     now = time.perf_counter()
     state = GPIO.input(channel)
     
@@ -163,6 +164,7 @@ def rx_callback(channel):
     if is_transmitting or (time.time() - last_tx_time) < 0.2:
         with rx_lock:
             bit_buffer.clear()
+            preamble_detected = False
         return
 
     now_wall = time.time()
@@ -181,17 +183,33 @@ def rx_callback(channel):
         # If the state is now LOW (0), it means the state that just finished was HIGH (1).
         if state == 0:
             pulse_us = duration * 1_000_000
+            
+            # 1. Preamble Detection: Look for a long HIGH pulse (nominally ~3620 us)
+            # We use a wide window [2500, 5000] us to tolerate OS timing jitter.
+            if 2500 <= pulse_us <= 5000:
+                preamble_detected = True
+                bit_buffer.clear()
+                if DEBUG:
+                    log(f"[DEBUG] Preamble detected ({pulse_us:.0f} us). Listening for data bits...")
+                return
+                
+            # 2. If no preamble has been detected yet, discard all pulses
+            if not preamble_detected:
+                return
+                
+            # 3. Decode bits based on HIGH pulse width
             if 150 <= pulse_us <= 600:
                 bit_buffer.append('0')
             elif 700 <= pulse_us <= 1500:
                 bit_buffer.append('1')
                 
-            # Prevent buffer overflow from continuous noise accumulation
+            # Discard if buffer grows too large (noise overflow protection)
             if len(bit_buffer) > 40:
                 bit_buffer.clear()
+                preamble_detected = False
 
 def check_timeout_loop():
-    global bit_buffer, last_edge_time
+    global bit_buffer, last_edge_time, preamble_detected
     last_cooldown_key = None
     last_ts = 0.0
     
@@ -199,18 +217,18 @@ def check_timeout_loop():
         time.sleep(0.01) # Check every 10 ms
         
         with rx_lock:
-            # If we have bits, and no edges occurred for > 15 ms, process the packet
-            if bit_buffer and (time.time() - last_edge_time) > 0.015:
+            # If we have bits, and no edges occurred for > 20 ms, process the packet
+            if bit_buffer and (time.time() - last_edge_time) > 0.020:
                 bits = bit_buffer
                 bit_buffer = []
+                preamble_detected = False
             else:
                 bits = None
                 
         if bits:
             bit_str = "".join(bits)
             
-            # Only print debug info if the packet has a reasonable length (filtering out minor noise)
-            if DEBUG and (25 <= len(bit_str) <= 35):
+            if DEBUG:
                 try:
                     val = int(bit_str, 2)
                     hex_val = f"{val:07x}"
@@ -238,7 +256,7 @@ def check_timeout_loop():
                         log(f"RX -> remote={remote_name} channel={channel} action={action} data={data}")
                         handle(remote_name, channel, action)
                     else:
-                        if not DEBUG or not (25 <= len(bit_str) <= 35): # Avoid double logging if debug already did it
+                        if not DEBUG:
                             log(f"UNKNOWN DATA (28 bits): {data}")
                 except Exception as e:
                     log(f"Error decoding bits {bit_str}: {e}")
